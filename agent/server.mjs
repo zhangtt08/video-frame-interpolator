@@ -135,7 +135,11 @@ export async function start({ port: wantPort, host = '127.0.0.1', label = 'agent
         json(res, 404, { ok: false, error: { code: 'not_found', message: `未知路径 ${route}`, endpoints: ['/api/health', '/api/agent/tools', '/api/agent/manifest', 'POST /api/agent/tool'] } });
       }
     } catch (e) {
-      json(res, 500, { ok: false, error: { code: 'internal', message: e.message } });
+      // 调用方修得了的问题不能报 500：坏 JSON、超大 body、缺必填都是调用方的错，
+      // 回 5xx 会让 Agent 以为"服务坏了"而反复重试，永远学不会改那行 body。
+      const code = e instanceof AgentError ? e.code : 'internal';
+      const callerFixable = e instanceof AgentError && ['bad_json', 'too_large', 'bad_input', 'unknown_tool', 'not_found'].includes(e.code);
+      json(res, callerFixable ? 400 : 500, { ok: false, error: { code, message: e.message } });
     }
   });
 
