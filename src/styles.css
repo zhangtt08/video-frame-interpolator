@@ -363,6 +363,15 @@ input:focus-visible {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
   color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chip > .icon {
+  flex-shrink: 0;
 }
 
 .chip.ok {
@@ -1048,4 +1057,417 @@ input:focus-visible {
   font-size: 20px;
   font-weight: 600;
   background: rgba(109, 141, 255, 0.08);
+}
+
+/* ---------- 图标基线（所有状态/动作图形都用内联 SVG，不用 emoji） ---------- */
+
+.icon {
+  display: block;
+  flex-shrink: 0;
+  vertical-align: -2px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge.err {
+  color: var(--err);
+  border-color: rgba(255, 107, 122, 0.4);
+  background: rgba(255, 107, 122, 0.09);
+}
+
+/* ---------- 预设 ---------- */
+
+.chip-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+
+.chip-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(124, 155, 255, 0.45);
+}
+
+.chip-btn.on {
+  color: #fff;
+  background: var(--grad);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.chip-btn.dirty {
+  border-style: dashed;
+  color: var(--warn);
+  cursor: default;
+}
+
+.preset-x {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 1px;
+  margin-right: -3px;
+  border-radius: 99px;
+  opacity: 0.6;
+}
+
+.preset-x:hover {
+  opacity: 1;
+  color: var(--err);
+}
+
+.preset-row {
+  margin-bottom: 8px;
+}
+
+.preset-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dz-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.dz-preset-label {
+  font-size: 12px;
+  color: var(--faint);
+  letter-spacing: 0.4px;
+}
+
+.dz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: center;
+}
+
+/* ---------- 队列行内动作 ---------- */
+
+.q-ops {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.op-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+}
+
+.op-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.q-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* 队列行窄窗口时换行而不是横向溢出 */
+@media (max-width: 720px) {
+  .q-item {
+    flex-wrap: wrap;
+  }
+  .q-ops {
+    margin-left: 30px;
+  }
+}
+
+/* ---------- 状态图标着色 ---------- */
+
+.st .icon {
+  color: inherit;
+}
+
+.st.pending {
+  color: var(--faint);
+}
+
+.st.cancelled {
+  color: var(--faint);
+}
+
+/* ---------- 总进度条 ---------- */
+
+.overall-bar {
+  margin: 2px 0 10px;
+  height: 6px;
+}
+
+/* ---------- 真实步骤条 ---------- */
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  counter-reset: step;
+}
+
+.steps li {
+  font-size: 11.5px;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.steps li::before {
+  counter-increment: step;
+  content: counter(step);
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+
+.steps li.past {
+  color: var(--ok);
+  border-color: rgba(62, 207, 142, 0.3);
+}
+
+.steps li.cur {
+  color: var(--accent);
+  border-color: rgba(124, 155, 255, 0.5);
+  background: rgba(124, 155, 255, 0.1);
+  font-weight: 600;
+}
+
+/* ---------- 错误出路 ---------- */
+
+.err-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.err-steps {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text);
+  list-style: decimal;
+}
+
+ul.err-steps {
+  list-style: none;
+  padding-left: 4px;
+  opacity: 0.85;
+}
+
+.err-steps li {
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 历史任务 ---------- */
+
+.history-card {
+  padding: 12px 14px;
+}
+
+.hist-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.hist-head .chev {
+  transition: transform 0.15s ease;
+}
+
+.icon.rot {
+  transform: rotate(90deg);
+}
+
+.hist-hint {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.hist-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.hist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 10px;
+}
+
+.hist-row:hover {
+  background: var(--card-hover);
+}
+
+.hist-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hist-name {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hist-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 批量输出位置 ---------- */
+
+.outdir-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.outdir-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.check.off {
+  opacity: 0.55;
+}
+
+.fps-input.grow {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin-top: 0;
+}
+
+/* ---------- 键盘提示 ---------- */
+
+.kbd-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.kbd-hint kbd {
+  font: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 0 6px;
+  margin: 0 2px;
+}
+
+.kbd-hint code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0 6px;
+}
+
+/* ---------- 窄窗口：一律纵向堆叠，不出现横向滚动 ---------- */
+
+@media (max-width: 1020px) {
+  .app {
+    padding: 12px 16px 36px;
+  }
+  .badges {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .mode-grid,
+  .quality-grid {
+    grid-template-columns: 1fr;
+  }
+  .seg button {
+    padding: 6px 10px;
+  }
+  .out-row {
+    flex-wrap: wrap;
+  }
+  .out-path {
+    flex-basis: 100%;
+  }
+}
+
+/* 长路径、长 hash 都可能把行撑爆：兜底允许断词 */
+.result-path,
+.fname,
+.q-name,
+.note,
+.out-note,
+.fine,
+.hint {
+  overflow-wrap: anywhere;
 }

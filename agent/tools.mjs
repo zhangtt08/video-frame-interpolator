@@ -23,11 +23,12 @@ function loadCompiled() {
   try {
     const pipeline = require(path.join(ROOT, 'dist-electron', 'pipeline.js'))
     const ffmpeg = require(path.join(ROOT, 'dist-electron', 'ffmpeg.js'))
-    return { pipeline, ffmpeg }
+    const defaults = require(path.join(ROOT, 'dist-electron', 'render-defaults.js'))
+    return { pipeline, ffmpeg, defaults }
   } catch (e) {
     throw new AgentError(
       'not_built',
-      '缺少编译后的核心模块（dist-electron/pipeline.js、dist-electron/ffmpeg.js）。' +
+      '缺少编译后的核心模块（dist-electron/pipeline.js、dist-electron/ffmpeg.js、dist-electron/render-defaults.js）。' +
         '请先在项目根运行 `npm run build`（agent:serve 已自动包含 build:electron）。原因：' +
         (e && e.message ? e.message : String(e))
     )
@@ -91,7 +92,7 @@ function walkVideos(dir, recursive, limit) {
 }
 
 // 解析目标帧率：显式 targetFps 优先，否则按倍率 × 源帧率。
-function resolveTargetFps(input, srcFps, MAX_FPS) {
+function resolveTargetFps(input, srcFps) {
   if (input.targetFps != null && input.targetFps !== '') {
     const tf = Math.round(Number(input.targetFps))
     if (!Number.isFinite(tf)) throw new AgentError('bad_input', 'targetFps 不是合法数字')
@@ -103,20 +104,40 @@ function resolveTargetFps(input, srcFps, MAX_FPS) {
 }
 
 // 计算并规范化输出路径（与桌面应用命名习惯一致：原名_帧率fps.容器）。
-function planOutputPath(input, srcFps, MAX_FPS) {
-  let container = input.container === 'mkv' ? 'mkv' : 'mp4'
-  let out = String(input.outputPath || '').trim()
-  if (out) {
-    const m = /\.(mp4|mkv)$/i.exec(out)
+// 桌面用的命名函数就是 pipeline.resolveOutputPath（经 render-defaults.planOutputPath 转出），不另写一套。
+function planOutputFor(input, targetFps) {
+  const explicit = String(input.outputPath || '').trim()
+  if (explicit) {
+    const m = /\.(mp4|mkv)$/i.exec(explicit)
     if (!m) throw new AgentError('bad_input', '输出文件必须是 .mp4 或 .mkv')
-    container = m[1].toLowerCase()
-  } else {
-    const dir = path.dirname(input.inputPath)
-    const base = path.basename(input.inputPath).replace(/\.[^.]+$/, '')
-    const tf = resolveTargetFps(input, srcFps, MAX_FPS)
-    out = path.join(dir, `${base}_${tf}fps.${container}`)
+    return { outputPath: explicit, container: m[1].toLowerCase() }
   }
-  return { outputPath: out, container }
+  const container = input.container === 'mkv' ? 'mkv' : 'mp4'
+  const dir = path.dirname(String(input.inputPath))
+  const base = path.basename(String(input.inputPath)).replace(/\.[^.]+$/, '')
+  return { outputPath: path.join(dir, `${base}_${targetFps}fps.${container}`), container }
+}
+
+/**
+ * Agent 进程的输出归属范围：输入文件所在目录 + 调用方显式指定的工作目录。
+ * 这一条把"随便挑一个可写卷往里写"关在门外，又不改变工具默认的"输出放在输入旁边"。
+ */
+function agentPathPolicy(inputPath) {
+  const { emptyPolicy, addToPolicy } = loadCompiledSafe().defaults
+  const policy = emptyPolicy()
+  if (inputPath) addToPolicy(policy, 'writableRoots', path.dirname(String(inputPath)))
+  const envRoot = String(process.env.FRAMEBOOST_WORKSPACE_ROOT ?? '').trim()
+  if (envRoot) addToPolicy(policy, 'writableRoots', envRoot)
+  for (const r of String(process.env.FRAMEBOOST_INPUT_ROOTS ?? '').split(';')) {
+    if (r.trim()) addToPolicy(policy, 'writableRoots', r.trim())
+  }
+  return policy
+}
+
+/** 共享校验函数抛出的带 code 错误 → 契约里的 AgentError，并把「下一步」拼进 message */
+function badWithCode(e, pipeline) {
+  const f = pipeline.classifyFailure({ code: e && e.code ? String(e.code) : null, message: e instanceof Error ? e.message : String(e) })
+  return new AgentError('bad_input', `${f.title}：${f.detail || ''}｜下一步：${f.steps.slice(0, 2).join(' / ')}`)
 }
 
 // ---------- 任务管理（Agent 进程内的异步渲染作业）----------
@@ -132,8 +153,15 @@ function fmtFps(v) {
   return Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : null
 }
 
+// server.mjs 是标准实现（不改），错误体只有 code/message 两个通道，
+// 所以把「下一步」直接拼进 message，Agent 读到的仍然是一句能照着做的事。
+function badWithSteps(f) {
+  return new AgentError('bad_input', `${f.title}：${f.detail || ''}｜下一步：${f.steps.slice(0, 2).join(' / ')}`)
+}
+
 function makeJob(params, info, attempts, tenBitCapable, meta) {
   const id = newJobId()
+  const { createProgressState, stageLabel } = loadCompiledSafe().pipeline
   const job = {
     id,
     params,
@@ -144,19 +172,20 @@ function makeJob(params, info, attempts, tenBitCapable, meta) {
     meta,
     proc: null,
     status: 'running',
+    stage: 'encode',
     cancelled: false,
     durationSec: info.durationSec,
     totalFrames: Math.max(1, Math.round(info.durationSec * params.targetFps)),
-    outTimeSec: 0,
-    frame: 0,
-    fps: 0,
-    speed: null,
+    // 进度状态由 pipeline 的共享解析器维护，与桌面应用读的是同一套字段
+    progress: createProgressState(),
+    stageLabel: () => stageLabel(job.stage),
     stderrTail: '',
     stdoutRest: '',
     command: '',
     encoderLabel: '',
     result: null,
     error: null,
+    failure: null,
     startedAt: Date.now(),
     finishedAt: 0
   }
@@ -166,30 +195,8 @@ function makeJob(params, info, attempts, tenBitCapable, meta) {
 }
 
 function percentOf(job) {
-  if (job.status !== 'running') return job.status === 'done' ? 100 : Math.min(100, (job.outTimeSec / job.durationSec) * 100)
-  return job.durationSec > 0 ? Math.min(99.5, (job.outTimeSec / job.durationSec) * 100) : 0
-}
-
-function handleProgressLine(job, line) {
-  const eq = line.indexOf('=')
-  if (eq <= 0) return
-  const key = line.slice(0, eq).trim()
-  const val = line.slice(eq + 1).trim()
-  if (key === 'out_time_us' || key === 'out_time_ms') {
-    const us = Number(val)
-    if (Number.isFinite(us) && us >= 0) job.outTimeSec = us / 1e6
-  } else if (key === 'frame') {
-    const f = Number(val)
-    if (Number.isFinite(f)) job.frame = f
-  } else if (key === 'fps') {
-    const f = Number(val)
-    if (Number.isFinite(f) && f > 0) job.fps = f
-  } else if (key === 'speed') {
-    const m = /([\d.]+)/.exec(val)
-    if (m) job.speed = Number(m[1])
-  } else if (key === 'progress' && val === 'end') {
-    job.outTimeSec = job.durationSec
-  }
+  const { percentFor } = loadCompiledSafe().pipeline
+  return percentFor(job.progress, job.durationSec, job.status === 'running')
 }
 
 function cleanupPart(out) {
@@ -198,12 +205,13 @@ function cleanupPart(out) {
 
 function runAttempt(job, index) {
   const { pipeline, ffmpeg } = loadCompiledSafe()
-  const { buildArgs, encoderLabel } = pipeline
+  const { buildArgs, encoderLabel, applyProgressLine } = pipeline
   const attempt = job.attempts[index]
   job.attemptIndex = index
   const args = buildArgs(job.params, job.info, attempt, job.tenBitCapable)
-  job.command = 'ffmpeg ' + args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ')
+  job.command = 'ffmpeg ' + args.map((a) => (/[\s"]/.exec(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ')
   job.encoderLabel = encoderLabel(attempt.nvenc)
+  job.stage = index === 0 ? 'encode' : 'retry'
   const proc = spawn(ffmpeg.ffmpegPath, args, { windowsHide: true })
   job.proc = proc
 
@@ -213,33 +221,51 @@ function runAttempt(job, index) {
     while ((nl = job.stdoutRest.indexOf('\n')) >= 0) {
       const line = job.stdoutRest.slice(0, nl).trim()
       job.stdoutRest = job.stdoutRest.slice(nl + 1)
-      if (line) handleProgressLine(job, line)
+      if (line) applyProgressLine(job.progress, line)
     }
   })
   proc.stderr.on('data', (d) => {
     job.stderrTail = (job.stderrTail + d.toString()).slice(-8000)
   })
   proc.on('error', (err) => {
+    const f = pipeline.classifyFailure({
+      stage: 'encode',
+      code: err && err.code ? String(err.code).toUpperCase() : 'FFMPEG_SPAWN_FAILED',
+      message: err.message
+    })
     job.status = 'error'
-    job.error = `无法启动 ffmpeg：${err.message}`
+    job.stage = 'failed'
+    job.failure = f
+    job.error = f.title
     job.finishedAt = Date.now()
   })
   proc.on('close', (code) => {
     if (job.cancelled) {
       void cleanupPart(job.params.outputPath)
       job.status = 'cancelled'
+      job.stage = 'cancelled'
       job.finishedAt = Date.now()
       return
     }
     if (code === 0) {
       const finalPath = job.params.outputPath
+      job.stage = 'finalize'
       fs.rename(`${finalPath}.part`, finalPath, (err) => {
         if (err) {
+          const f = pipeline.classifyFailure({
+            stage: 'finalize',
+            code: err && err.code ? String(err.code).toUpperCase() : null,
+            message: `输出文件保存失败：${err.message}`,
+            detailPath: finalPath
+          })
           job.status = 'error'
-          job.error = `输出文件保存失败：${err.message}`
+          job.stage = 'failed'
+          job.failure = f
+          job.error = f.title
           job.finishedAt = Date.now()
           return
         }
+        job.stage = 'reprobe'
         // 回探输出信息（真实 ffprobe），供结果展示
         ffmpeg
           .probeVideo(finalPath)
@@ -248,7 +274,9 @@ function runAttempt(job, index) {
               outputPath: finalPath,
               sizeBytes: outInfo.sizeBytes,
               fps: outInfo.fps > 0 ? outInfo.fps : outInfo.avgFps,
-              durationSec: outInfo.durationSec
+              durationSec: outInfo.durationSec,
+              pixFmt: outInfo.pixFmt,
+              colorTrc: outInfo.colorTrc
             }
           })
           .catch(() => {
@@ -256,6 +284,7 @@ function runAttempt(job, index) {
           })
           .finally(() => {
             job.status = 'done'
+            job.stage = 'done'
             job.finishedAt = Date.now()
           })
       })
@@ -265,12 +294,21 @@ function runAttempt(job, index) {
       const next = job.attempts[index + 1]
       job.meta = job.meta || {}
       job.meta.retriedFrom = encoderLabel(attempt.nvenc)
+      job.meta.retryReason =
+        attempt.nvenc !== 'none' && next.nvenc === 'none' ? 'NVENC 不可用，回退 CPU 编码' : '音轨直写失败，改为 AAC 重编码'
       runAttempt(job, index + 1)
       return
     }
+    const f = pipeline.classifyFailure({
+      stage: 'encode',
+      message: 'ffmpeg 处理失败',
+      stderr: job.stderrTail.trim()
+    })
     void cleanupPart(job.params.outputPath)
     job.status = 'error'
-    job.error = 'ffmpeg 处理失败：' + (job.stderrTail.trim().slice(-600) || '未知原因')
+    job.stage = 'failed'
+    job.failure = f
+    job.error = f.title
     job.finishedAt = Date.now()
   })
 }
@@ -283,36 +321,41 @@ function loadCompiledSafe() {
 }
 
 function describeJob(job) {
-  const remainSec =
-    job.status === 'running' && job.speed && job.speed > 0 && job.durationSec > 0
-      ? Math.max(0, (job.durationSec - job.outTimeSec) / job.speed)
-      : null
+  const { etaSeconds, stageLabel } = loadCompiledSafe().pipeline
+  const pr = job.progress
+  const remainSec = job.status === 'running' ? etaSeconds(pr, job.durationSec) : null
   return {
     jobId: job.id,
     status: job.status,
+    stage: job.stage,
+    stageLabel: stageLabel(job.stage),
     inputPath: job.params.inputPath,
     outputPath: job.params.outputPath,
+    srcFps: fmtFps(job.info.fps > 0 ? job.info.fps : job.info.avgFps),
     targetFps: job.params.targetFps,
     mode: job.params.mode,
     quality: job.params.quality,
     container: job.params.container,
     encoderLabel: job.encoderLabel,
     command: job.command,
+    retryReason: (job.meta && job.meta.retryReason) || undefined,
     percent: Math.round(percentOf(job) * 10) / 10,
     elapsedSec: Math.round(((job.finishedAt || Date.now()) - job.startedAt) / 1000),
     progress:
       job.status === 'running' || job.status === 'done'
         ? {
-            outTimeSec: Math.round(job.outTimeSec * 10) / 10,
-            frame: job.frame,
+            outTimeSec: Math.round(pr.outTimeSec * 10) / 10,
+            frame: pr.frame,
             totalFrames: job.totalFrames,
-            processFps: fmtFps(job.fps),
-            speedX: job.speed != null ? Math.round(job.speed * 100) / 100 : null,
-            etaSec: remainSec != null ? Math.round(remainSec) : null
+            processFps: fmtFps(pr.fps),
+            speedX: pr.speed != null ? Math.round(pr.speed * 100) / 100 : null,
+            etaSec: remainSec != null ? remainSec : null
           }
         : undefined,
     result: job.result || undefined,
-    error: job.error || undefined
+    error: job.error || undefined,
+    errorSteps: job.failure ? job.failure.steps : undefined,
+    errorDetail: job.failure ? job.failure.detail || undefined : undefined
   }
 }
 
@@ -414,7 +457,7 @@ export const tools = [
         targetFps: { type: 'integer', description: '目标帧率（与 multiplier 二选一）' },
         multiplier: { type: 'number', description: '按源帧率的倍率（>1），与 targetFps 二选一' },
         mode: { type: 'string', enum: ['high', 'balanced', 'fast'], description: '补帧方式，默认 balanced' },
-        quality: { type: 'string', enum: ['master', 'high', 'standard'], description: '输出质量，默认 high' },
+        quality: { type: 'string', enum: ['master', 'high', 'standard'], description: '输出质量，默认 standard（与桌面应用同一份默认值表）' },
         container: { type: 'string', enum: ['mp4', 'mkv'], description: '封装格式（决定默认输出后缀），默认 mp4' },
         useNvenc: { type: 'boolean', description: '是否尝试 NVIDIA NVENC，默认 true（不可用自动回退 CPU）' },
         confirm: { type: 'boolean', description: '必须显式 true 才会真实执行渲染' }
@@ -423,39 +466,69 @@ export const tools = [
       additionalProperties: false
     },
     handler: async (input) => {
-      const { ffmpeg, pipeline } = loadCompiled()
-      const { probeVideo, detectNvenc, detectTenBit } = ffmpeg
-      const { pixFmtFor, planAttempts, resolveOutputPath, MAX_FPS } = pipeline
+      const { ffmpeg, pipeline, defaults } = loadCompiled()
+      const { normalizeRenderParams, preflightRenderPlan, pixelFormatNotice, planOutputPath, resolveInsideRoot, emptyPolicy, addToPolicy } = defaults
 
-      const inputPath = String(input.inputPath)
-      if (!fs.existsSync(inputPath)) throw new AgentError('bad_input', `输入文件不存在：${inputPath}`)
+      // 默认值与校验只有一份实现：桌面应用用的就是这个函数。
+      // 之前这里自己写了第二套（quality 默认 high、桌面默认 standard），同一能力两种码率。
+      const inputPath = String(input.inputPath ?? '')
+      if (!inputPath) throw new AgentError('bad_input', '必须提供 inputPath')
+      let params
+      try {
+        let targetFps = input.targetFps != null && input.targetFps !== '' ? Math.round(Number(input.targetFps)) : 0
+        if (!(targetFps > 0)) {
+          // 倍率模式要先知道源帧率，所以这里可能多探一次；探测走的是共享闸门（有超时、有输出上限）
+          const pre = await ffmpeg.probeVideo(inputPath)
+          targetFps = resolveTargetFps(input, pre.fps > 0 ? pre.fps : pre.avgFps)
+        }
+        const planned = planOutputFor(input, targetFps)
+        params = normalizeRenderParams({
+          inputPath,
+          outputPath: planned.outputPath,
+          targetFps,
+          mode: input.mode,
+          quality: input.quality,
+          container: planned.container,
+          // Agent 侧的 useNvenc 由工具 schema 自己声明（默认尝试硬件加速），
+          // 传成"明确给过的值"，不改动共享默认，两边都不会漂移。
+          useNvenc: input.useNvenc !== false
+        })
+      } catch (e) {
+        if (e instanceof AgentError) throw e
+        throw badWithCode(e, pipeline)
+      }
 
-      const info = await probeVideo(inputPath)
+      // 输出归属：落在输入文件所在目录、或调用方用环境变量指定的工作目录之内。
+      // 这一条挡的是"随便挑一个卷往里写"，不是把 Agent 变成第二个桌面 —— 见 agent/README.md。
+      const policy = agentPathPolicy(inputPath)
+      const inside = policy.writableRoots.some((root) => resolveInsideRoot(params.outputPath, root).ok)
+      if (!inside) {
+        throw new AgentError(
+          'bad_input',
+          `输出路径不在允许的工作目录内：${params.outputPath}｜已允许的目录：${policy.writableRoots.join('、')}｜下一步：把 outputPath 指到输入文件所在目录，或设置 FRAMEBOOST_WORKSPACE_ROOT 后重试`
+        )
+      }
+
+      let planResult
+      try {
+        planResult = await preflightRenderPlan(params, {
+          checkReadable: ffmpeg.checkReadable,
+          probeVideo: ffmpeg.probeVideo,
+          checkDirWritable: ffmpeg.checkDirWritable,
+          freeBytesFor: ffmpeg.freeBytesFor
+        })
+      } catch (e) {
+        throw badWithCode(e, pipeline)
+      }
+      const info = planResult.info
       const srcFps = info.fps > 0 ? info.fps : info.avgFps
-      if (!(srcFps > 0)) throw new AgentError('probe_failed', '无法读取原视频帧率')
 
-      const targetFps = resolveTargetFps(input, srcFps, MAX_FPS)
-      const { outputPath, container } = planOutputPath(input, srcFps, MAX_FPS)
-
-      // 与桌面应用一致的参数校验（sanitizeParams 的等价检查）
-      if (path.resolve(inputPath) === path.resolve(outputPath)) throw new AgentError('bad_input', '输出路径不能与输入文件相同')
-      if (!Number.isFinite(targetFps) || targetFps < 5 || targetFps > MAX_FPS)
-        throw new AgentError('bad_input', `目标帧率无效（应在 5-${MAX_FPS} 之间）`)
-      if (targetFps <= srcFps + 0.01)
-        throw new AgentError('bad_input', `目标帧率需高于原帧率（原 ${fmtFps(srcFps)} fps）`)
-
-      const mode = input.mode === 'high' || input.mode === 'fast' ? input.mode : 'balanced'
-      const quality = input.quality === 'master' || input.quality === 'standard' ? input.quality : 'high'
-      const useNvenc = input.useNvenc === false ? false : true
-      const finalOutput = resolveOutputPath(outputPath, (x) => fs.existsSync(x))
-      fs.mkdirSync(path.dirname(finalOutput), { recursive: true })
-
-      const params = { inputPath, outputPath: finalOutput, targetFps, mode, quality, container, useNvenc }
-
-      const tenBitCapable = await detectTenBit()
-      const eff = pixFmtFor(info.pixFmt, tenBitCapable)
-      const nvencLevel = useNvenc && !eff.downgraded ? await detectNvenc() : 'none'
-      const attempts = planAttempts(params, nvencLevel, !eff.downgraded)
+      const tenBitCapable = await ffmpeg.detectTenBit()
+      const nvencLevel = params.useNvenc ? await ffmpeg.detectNvenc() : 'none'
+      const { eff, notices } = pixelFormatNotice(params, info, tenBitCapable, nvencLevel)
+      const attempts = pipeline.planAttempts(params, nvencLevel, !eff.downgraded)
+      // 重名不覆盖：命名规则同样来自共享实现（只在同一目录里加数字后缀）
+      params = { ...params, outputPath: planOutputPath(params.outputPath) }
 
       // 预演（dry-run）：未确认时只返回执行计划，不启动任何进程。
       if (input.confirm !== true) {
@@ -465,29 +538,27 @@ export const tools = [
           risk: 'exec',
           message: '这是写操作：将真实调用 ffmpeg 生成文件。请传 confirm:true 重新调用以执行。',
           plan: {
-            inputPath,
-            outputPath: finalOutput,
-            targetFps,
+            ...params,
             srcFps: fmtFps(srcFps),
-            mode,
-            quality,
-            container,
-            useNvenc,
-            nvencLevel,
+            nvencLevel: attempts[0]?.nvenc ?? 'none',
             pixFmtDowngraded: eff.downgraded,
+            estimatedOutputBytes: planResult.estimatedBytes,
+            diskFreeBytes: planResult.freeBytes,
+            notices,
+            outputContainment: { roots: policy.writableRoots, fromEnv: !!String(process.env.FRAMEBOOST_WORKSPACE_ROOT ?? '').trim() },
             attemptSequence: attempts.map((a) => ({ encoder: a.nvenc, audio: a.audio }))
           }
         }
       }
 
-      const job = makeJob(params, info, attempts, tenBitCapable, {})
-      return { executed: true, jobId: job.id, encoderLabel: job.encoderLabel, command: job.command, status: job.status }
+      const job = makeJob(params, info, attempts, tenBitCapable, { notices })
+      return { executed: true, jobId: job.id, encoderLabel: job.encoderLabel, command: job.command, status: job.status, notices }
     }
   },
   {
     name: 'frameboost.job_status',
     description:
-      '查询某个补帧任务的进度与结果。running 时给出百分比、已处理时长、处理帧率、倍速与预估剩余秒数；done 时给出输出文件真实 ffprobe 结果；error 时给出原因。',
+      '查询某个补帧任务的进度与结果。running 时给出百分比、已处理时长、处理帧率、倍速与预估剩余秒数，并给出当前真实阶段 stage/stageLabel（encode/retry/finalize/reprobe）；done 时给出输出文件真实 ffprobe 结果；error 时给出归因结论与下一步。所有数字都来自解析 ffmpeg -progress 输出，不是估算。',
     risk: 'read',
     input_schema: {
       type: 'object',
@@ -521,6 +592,7 @@ export const tools = [
       if (!job) throw new AgentError('unknown_job', `未找到任务：${input.jobId}`)
       if (job.status !== 'running') return { jobId: job.id, status: job.status, cancelled: false, message: '任务不在运行中' }
       job.cancelled = true
+      job.stage = 'cancelled'
       try {
         job.proc?.kill()
       } catch {
@@ -529,7 +601,14 @@ export const tools = [
       await cleanupPart(job.params.outputPath)
       job.status = 'cancelled'
       job.finishedAt = Date.now()
-      return { jobId: job.id, status: 'cancelled', cancelled: true }
+      return {
+        jobId: job.id,
+        status: 'cancelled',
+        stage: 'cancelled',
+        cancelled: true,
+        partFileRemoved: !fs.existsSync(`${job.params.outputPath}.part`),
+        message: '已终止 ffmpeg 子进程并清理 .part 半成品'
+      }
     }
   },
   {

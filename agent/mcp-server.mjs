@@ -20,9 +20,14 @@ function endpointFile() {
 }
 
 async function rpc(base, method, params) {
+  // 本机守卫要求：Host 必须是 127.0.0.1:<port>（fetch 按 base 自动带）；
+  // 配了 FRAMEBOOST_API_TOKEN 时非 GET 必须带令牌，否则 401。
+  const token = String(process.env.FRAMEBOOST_API_TOKEN || process.env.AGENT_API_TOKEN || '').trim();
+  const headers = { 'content-type': 'application/json' };
+  if (token) headers['x-frameboost-token'] = token;
   const res = await fetch(`${base}/api/agent/${method === 'tools/list' ? 'tools' : 'tool'}`, {
     method: method === 'tools/list' ? 'GET' : 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: method === 'tools/list' ? undefined : JSON.stringify(params),
     signal: AbortSignal.timeout(120_000),
   });

@@ -6,8 +6,14 @@ release/
 agent/.endpoint
 *.log
 *.mp4
+*.mkv
 *.part
+*.tmp
+*.lnk
 sample-*.mp4
 test-*.mp4
 out-*.mp4
 .DS_Store
+.env
+.env.*
+!.env.example

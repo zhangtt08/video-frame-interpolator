@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- CSP 由 vite.config.ts 的 frameboost:csp-build / csp-serve 两个插件注入：
+         交付的那一份（dist-renderer/index.html）是 script-src 'self'，不带任何 unsafe-*；
+         dev 页面多一条 'unsafe-inline'，因为 @vitejs/plugin-react 在 dev 会注入内联引导脚本。
+         这里不直接写死 meta，是为了让两种模式各拿到自己那一套（详见 vite.config.ts 顶部注释）。 -->
     <title>FrameBoost · 视频补帧</title>
   </head>
   <body>
