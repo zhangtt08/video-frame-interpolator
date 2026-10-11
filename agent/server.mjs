@@ -1,29 +1,18 @@
 #!/usr/bin/env node
-// Agent API server — personal-agent-hub 标准模板的本地副本。
-// 契约见 personal-agent-hub/docs/AGENT_API_STANDARD.md
-//
-// 本轮按「本地服务守卫标准」补了守卫（只监听 127.0.0.1 不是边界：恶意页面的简单 POST 就能打到本机端口）。
-// 守卫的实现**不在这个文件里第二遍**：复用 dist-electron/local-guard.js（TypeScript 单一来源），
-// 应用内 REST(8393) 与这里的 Agent API(8791) 走的是同一份判据。
-// 守卫模块没编译出来时按 fail-closed 处理：只读端点照常，任何写请求一律拒绝并说清原因。
+// Agent API server — 标准实现（本机守卫版），项目只需提供同目录下的 tools.mjs。
+// 契约见 personal-agent-hub/docs/AGENT_API_STANDARD.md。
+// 守卫判据见 ./local-guard.mjs；令牌来源见 ./token-store.mjs。复制时本文件逻辑不必改动；
+// 项目在 tools.mjs 里 export const project = { id, name, version, summary, port? } 即可：
+// 令牌请求头按 x-<id>-token 自动推导（id 缺省 'agent'），默认端口按 project.port（缺省 8790）。
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { assertLoopbackBindHost, checkLocalGuard, describeBindError, localHeaders, replyGuardDenied } from './local-guard.mjs';
+import { ensureAgentToken } from './token-store.mjs';
 
-const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const START = Date.now();
-
-/** 载入共享守卫；返回 null 表示核心还没编译（npm run build:electron） */
-export function loadGuard() {
-  try {
-    return require(path.resolve(__dirname, '..', 'dist-electron', 'local-guard.js'));
-  } catch {
-    return null;
-  }
-}
 
 export class AgentError extends Error {
   constructor(code, message) {
@@ -38,16 +27,13 @@ function loadTools() {
   return import(`file:///${p.replace(/\\/g, '/')}`);
 }
 
-function json(res, status, body, headers = {}) {
+function json(res, status, body, extra = {}) {
   const buf = Buffer.from(JSON.stringify(body));
-  // 状态变更路由上永不发 Access-Control-Allow-Origin: *（模板里原本每条响应都带，等于欢迎任意网页来 POST）
-  res.writeHead(status, {
+  res.writeHead(status, localHeaders({
     'content-type': 'application/json; charset=utf-8',
     'content-length': buf.length,
-    'cache-control': 'no-store',
-    'x-content-type-options': 'nosniff',
-    ...headers,
-  });
+    ...extra,
+  }));
   res.end(buf);
 }
 
@@ -82,40 +68,41 @@ function validate(schema, input) {
 }
 
 export async function start({ port: wantPort, host = '127.0.0.1', label = 'agent' } = {}) {
+  // 标准第 1 条：绑非回环直接拒绝启动，不是提醒一句
+  const bind = assertLoopbackBindHost(host);
+  if (!bind.ok) throw new Error(bind.error);
   const mod = await loadTools();
   const meta = mod.project || { name: label, version: '0.0.0' };
+  const projectId = String(mod.projectId || meta.id || label);
+  const tokenHeader = `x-${projectId}-token`;
+  // 令牌在服务起来之前就取定：拿不到就抛，绝不以"写接口没有守卫"的状态监听
+  const secret = ensureAgentToken(projectId);
   const tools = mod.tools || [];
   const byName = new Map(tools.map((t) => [t.name, t]));
   const descriptor = (t) => ({ name: t.name, description: t.description, input_schema: t.input_schema, risk: t.risk || 'read' });
 
-  const guard = loadGuard();
-  if (!guard) {
-    console.error('[agent] 未找到 dist-electron/local-guard.js —— 写请求将被拒绝。请先运行 `npm run build:electron`（或 `npm run agent:serve`）。');
-  }
-  const token = String(process.env.FRAMEBOOST_API_TOKEN ?? '').trim();
-  if (!token) console.warn('[agent] 未设置 FRAMEBOOST_API_TOKEN：本机任何进程都能调用写接口。要给接口上锁就设这个环境变量（MCP 桥会自动带上）。');
-
   const server = createServer(async (req, res) => {
     const addr = server.address();
-    const port = typeof addr === 'object' && addr ? addr.port : Number(wantPort) || 8791;
+    const port = typeof addr === 'object' && addr ? addr.port : Number(wantPort) || 8790;
     // 守卫在最前：Host / Origin / Referer / 令牌，任何一条不过都不进业务分支
-    if (guard) {
-      const verdict = guard.checkLocalGuard(req, { port, token, tokenHeader: 'x-frameboost-token' });
-      if (!verdict.ok) { guard.replyGuardDenied(res, verdict); return; }
-    } else if (req.method !== 'GET' && req.method !== 'HEAD') {
-      json(res, 503, { ok: false, error: { code: 'GUARD_UNAVAILABLE', message: '守卫模块缺失（dist-electron/local-guard.js），写请求按 fail-closed 拒绝。请运行 `npm run build:electron` 后重启本服务。' } });
-      return;
-    }
+    const verdict = checkLocalGuard(req, { port, token: secret.token, tokenHeader });
+    if (!verdict.ok) { replyGuardDenied(res, verdict, tokenHeader); return; }
     const url = new URL(req.url, `http://${req.headers.host || host}`);
     const route = url.pathname.replace(/\/+$/, '') || '/';
     try {
-      if (req.method === 'OPTIONS') { json(res, 204, { ok: false, error: { code: 'NO_CORS', message: '本机服务不做跨源放行；请从本机回环地址直接调用' } }); return; }
+      if (req.method === 'OPTIONS') {
+        // 预检也是非 GET：能走到这里说明它带了合法令牌且来源是本机回环。
+        // 回 405 并且**不发任何 Access-Control-* —— 本服务不做跨源放行，
+        // 跨源页面连预检都过不了，也就不可能对 /api/agent/tool 发出真请求。
+        json(res, 405, { ok: false, error: { code: 'no_cors', message: '本机服务不做跨源放行；请从本机回环地址带令牌直接调用' } }, { allow: 'GET, POST, OPTIONS' });
+        return;
+      }
       if (route === '/api/health') {
-        json(res, 200, { ok: true, data: { project: meta.name, version: meta.version, agent_api: 1, tools: tools.length, uptime_ms: Date.now() - START, guard: { hostAllowlist: `127.0.0.1:${port} / localhost:${port} / [::1]:${port}`, tokenRequired: !!token, compiled: !!guard } } });
+        json(res, 200, { ok: true, data: { project: meta.name, version: meta.version, agent_api: 1, tools: tools.length, uptime_ms: Date.now() - START, guard: { host: `127.0.0.1:${port} / localhost:${port} / [::1]:${port}`, origin: 'loopback only', token_required_for: '非 GET/HEAD', token_file: secret.file ?? 'env', wildcard_cors: false } } });
       } else if (route === '/api/agent/tools') {
         json(res, 200, { ok: true, data: tools.map(descriptor) });
       } else if (route === '/api/agent/manifest') {
-        json(res, 200, { ok: true, data: { project: meta.name, version: meta.version, description: meta.summary || '', base_url: `http://${host}:${server.address().port}`, tools: tools.map(descriptor) } });
+        json(res, 200, { ok: true, data: { project: meta.name, version: meta.version, description: meta.summary || '', base_url: `http://${host}:${port}`, tools: tools.map(descriptor), api: { token_header: tokenHeader, token_env: 'AGENT_API_TOKEN', token_file: secret.file ?? null } } });
       } else if (route === '/api/agent/tool' && req.method === 'POST') {
         const body = await readBody(req);
         const tool = byName.get(body.tool);
@@ -125,7 +112,7 @@ export async function start({ port: wantPort, host = '127.0.0.1', label = 'agent
         try {
           const t0 = Date.now();
           validate(tool.input_schema, body.input);
-          const data = await tool.handler(body.input || {}, { meta, host, port: server.address().port });
+          const data = await tool.handler(body.input || {}, { meta, host, port });
           json(res, 200, { ok: true, tool: tool.name, ms: Date.now() - t0, data });
         } catch (e) {
           const code = e instanceof AgentError ? e.code : 'handler_failed';
@@ -147,15 +134,17 @@ export async function start({ port: wantPort, host = '127.0.0.1', label = 'agent
   const listen = (p, tries) => new Promise((resolve, reject) => {
     server.once('error', (e) => {
       if (e.code === 'EADDRINUSE' && tries > 0) resolve(listen(p + 1, tries - 1));
-      else reject(e);
+      // 绑定失败要说得出原因与下一步，不许留一个"看起来起来了"的空进程
+      else reject(new Error(describeBindError(e, p)));
     });
     server.listen(p, host, () => resolve(server.address().port));
   });
 
-  const port = await listen(wantPort || server.address()?.port || 8790, 12);
+  const port = await listen(Number(wantPort) || Number(process.env.AGENT_PORT || process.env.PORT) || Number(meta.port) || 8790, 12);
   writeFileSync(endpointFile, `http://${host}:${port}\n`);
   console.log(`[agent] ${meta.name} v${meta.version} → http://${host}:${port} (${tools.length} tools)`);
-  return { server, port, url: `http://${host}:${port}`, tools: tools.map(descriptor) };
+  console.log(`[agent] 本机守卫：Host 只认 127.0.0.1/localhost/[::1]:${port}，非 GET 需 ${tokenHeader}${secret.file ? `（令牌文件 ${secret.file}，0600）` : '（令牌来自环境变量）'}`);
+  return { server, port, url: `http://${host}:${port}`, token: secret.token, tokenHeader, tools: tools.map(descriptor) };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
