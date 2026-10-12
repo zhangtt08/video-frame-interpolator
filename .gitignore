@@ -17,3 +17,5 @@ out-*.mp4
 .env
 .env.*
 !.env.example
+
+*.exe
