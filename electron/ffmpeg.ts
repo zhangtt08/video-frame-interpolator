@@ -407,3 +407,40 @@ export async function detectTenBit(): Promise<boolean> {
   }
   return tenBitCache
 }
+
+let qsvCache: boolean | null = null
+let amfCache: boolean | null = null
+
+/** 检测 Intel QuickSync (h264_qsv) 硬件编码能力 */
+export async function detectQsv(): Promise<boolean> {
+  if (qsvCache !== null) return qsvCache
+  try {
+    const r = await runBin(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=128x128:r=30:d=0.2', '-frames:v', '5', '-c:v', 'h264_qsv', '-f', 'null', '-'], 10000)
+    qsvCache = r.code === 0
+  } catch {
+    qsvCache = false
+  }
+  return qsvCache
+}
+
+/** 检测 AMD AMF (h264_amf) 硬件编码能力 */
+export async function detectAmf(): Promise<boolean> {
+  if (amfCache !== null) return amfCache
+  try {
+    const r = await runBin(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=128x128:r=30:d=0.2', '-frames:v', '5', '-c:v', 'h264_amf', '-f', 'null', '-'], 10000)
+    amfCache = r.code === 0
+  } catch {
+    amfCache = false
+  }
+  return amfCache
+}
+
+/** 硬件编码器综合探测结果 */
+export async function detectHwEncoders(): Promise<{ nvenc: NvencLevel; qsv: boolean; amf: boolean }> {
+  const [nvenc, qsv, amf] = await Promise.all([
+    detectNvenc(),
+    detectQsv(),
+    detectAmf()
+  ])
+  return { nvenc, qsv, amf }
+}

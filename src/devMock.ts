@@ -70,8 +70,8 @@ export function installDevMock(): void {
       addSeq += 1
       return { ok: true, info: { ...(addSeq % 2 === 0 ? DEMO2 : DEMO) } as ProbeResult }
     },
-    pathForFile: () => '',
     pickVideo: async () => [DEMO.path],
+    onFilesPicked: () => () => undefined,
     pickOutput: async (def: string) => def,
     pickDir: async () => 'C:\\Videos\\补帧输出',
     showInFolder: async () => true,

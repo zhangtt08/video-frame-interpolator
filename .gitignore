@@ -1,6 +1,8 @@
 node_modules/
 dist-renderer/
 dist-electron/
+# 本地截图/走查用的 mock 构建（vite.shots.mts），不属于交付物
+dist-preview/
 release/
 # tests/ are real assets and must be tracked — do not ignore them.
 agent/.endpoint
@@ -18,4 +20,6 @@ out-*.mp4
 .env.*
 !.env.example
 
+# 交付用的便携版 exe 放在仓库根目录，供直接双击运行；打包产物仍忽略
 *.exe
+# FrameBoost.exe is kept locally for desktop launch

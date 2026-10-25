@@ -35,6 +35,8 @@ export interface RenderParams {
   quality: Quality
   useNvenc: boolean
   container: 'mp4' | 'mkv'
+  scdThreshold?: number
+  copySubtitles?: boolean
 }
 
 export interface Attempt {
@@ -190,10 +192,11 @@ export function buildFilter(p: RenderParams, info: ProbeResult, tenBitCapable: b
   if (p.mode === 'fast') {
     return `${pad}framerate=fps=${p.targetFps},${trim}format=${fmt}`
   }
+  const scd = p.scdThreshold && p.scdThreshold > 0 ? (':scd=fdiff:scd_threshold=' + p.scdThreshold) : ''
   const mc =
     p.mode === 'high'
-      ? 'mc_mode=aobmc:me_mode=bidir:vsbmc=1'
-      : 'mc_mode=obmc:me_mode=bidir:vsbmc=0'
+      ? ('mc_mode=aobmc:me_mode=bidir:vsbmc=1' + scd)
+      : ('mc_mode=obmc:me_mode=bidir:vsbmc=0' + scd)
   const src = sanitizeRational(info.fpsRational, info.fps > 0 ? info.fps : info.avgFps)
   const normalize = src ? `fps=${src},` : ''
   return `${normalize}${pad}minterpolate=fps=${p.targetFps}:mi_mode=mci:${mc},${trim}format=${fmt}`
@@ -1008,6 +1011,8 @@ export function buildArgs(p: RenderParams, info: ProbeResult, attempt: Attempt, 
     attempt.audio
   ]
   if (attempt.audio === 'aac') args.push('-b:a', '192k')
+  if (p.container === 'mkv' || p.copySubtitles) args.push('-map', '0:s?', '-c:s', 'copy')
+  args.push('-map_metadata', '0')
   if (info.colorPrimaries && info.colorPrimaries !== 'unknown') args.push('-color_primaries', info.colorPrimaries)
   if (info.colorTrc && info.colorTrc !== 'unknown') args.push('-color_trc', info.colorTrc)
   if (info.colorSpace && info.colorSpace !== 'unknown') args.push('-colorspace', info.colorSpace)

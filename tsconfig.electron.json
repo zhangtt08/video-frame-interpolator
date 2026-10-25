@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    // preload 跑在渲染进程的隔离世界里，要用 DOM 类型（File / DragEvent / window）。
+    // 主进程那侧不碰这些全局，加了 lib 也不会误用。
+    "lib": ["ES2022", "DOM"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "outDir": "dist-electron",

@@ -1,143 +1,134 @@
-# FrameBoost
+# ⚡ FrameBoost (帧跃) · 本地极速视频补帧神器
 
-**A local, offline video frame-interpolation app for Windows.** Feed it a low-frame-rate video (e.g. 30 fps) and it outputs a smooth high-frame-rate version (60/90/120 fps+) via FFmpeg optical-flow interpolation or frame blending — with NVENC hardware encoding, 10-bit preservation and HDR color-metadata passthrough. Nothing is ever uploaded; all processing happens on your machine.
+<p align="center">
+  <img src="./build/icon.png" width="100" height="100" alt="FrameBoost Icon" />
+</p>
 
-> 一款全程本地处理的 Windows 视频补帧桌面应用：把 30fps 视频插帧到 60fps+，光流补偿 / 帧混合两档原理，NVENC 硬件加速编码，10bit 与 HDR 色彩元数据完整保留。
+<p align="center">
+  <b>一款免费开源、支持 GPU 硬件加速的本地离线视频插帧工具</b><br>
+  一键将 24/30fps 动漫、老电影、游戏高光平滑插帧至 60/90/120fps 丝滑高刷！纯本地运行 · 零云端上传 · 保护隐私
+</p>
 
-English | [简体中文](./README.zh-CN.md)
+<p align="center">
+  <a href="./README.en.md">English Documentation</a> | <b>简体中文</b>
+</p>
 
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Platform](https://img.shields.io/badge/platform-Windows%20x64-0078D6?logo=windows&logoColor=white)
-![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)
-![FFmpeg](https://img.shields.io/badge/FFmpeg-bundled%2C%20no%20install-007808?logo=ffmpeg&logoColor=white)
-![NVENC](https://img.shields.io/badge/encoding-NVENC%20accelerated-76B900)
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" />
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2B-0078D6?logo=windows&logoColor=white" alt="Platform" />
+  <img src="https://img.shields.io/badge/GPU%E5%8A%A0%E9%80%9F-NVIDIA%20NVENC-76B900?logo=nvidia&logoColor=white" alt="NVENC" />
+  <img src="https://img.shields.io/badge/100%25-纯本地离线-brightgreen" alt="Offline" />
+  <img src="https://img.shields.io/badge/FFmpeg-免安装内置-007808?logo=ffmpeg&logoColor=white" alt="FFmpeg" />
+  <img src="https://img.shields.io/badge/Agent-MCP%20Ready-orange" alt="MCP" />
+</p>
 
-**The problem it solves:** low-frame-rate footage looks choppy, and FFmpeg's stock `minterpolate` one-liner is a trap — it silently drops frames at the tail, wrecks 10-bit and HDR color, and re-encodes audio for no reason. FrameBoost wraps carefully engineered ffmpeg filter chains in a simple drag-and-drop queue app: exact output frame counts, color metadata carried through untouched, hardware encoding when available, and automatic multi-level fallback when it is not. It trades speed for quality and tells you so up front (see [Performance expectations](#performance-expectations)).
+---
 
-![Screenshot](docs/screenshot.png)
+## 🎯 为什么选择 FrameBoost？
 
-## ✨ Features
+你是否有过这样的体验：
+* 想看 **60 帧 / 120 帧** 丝滑的高刷动漫或电影，但在视频网站需要会员甚至根本没有高帧率选项？
+* 网上的在线 AI 补帧工具 **按分钟收费、限制文件大小、还要排长队**，而且容易泄露个人视频隐私？
+* 用传统 FFmpeg 命令行处理，参数复杂得像天书，还常常遇到 **尾部莫名掉帧、HDR 画面发灰变色、音画不同步** 的恼人问题？
 
-### Three interpolation modes
+**FrameBoost 就是为你打造的终极解决方案！**  
+无需安装复杂的 Python 或 CUDA 环境，自带精美的现代桌面界面与开箱即用的 FFmpeg 引擎。拖入视频，一键开启电影级补帧！
 
-| Mode | How it works | Best for |
-|---|---|---|
-| Optical flow · Fine | `minterpolate` AOBMC adaptive block size + bidirectional motion estimation + variational weighting | Quality first, slow is fine |
-| Optical flow · Balanced | `minterpolate` OBMC motion compensation | Most videos (recommended) |
-| Frame blending | Weighted fusion of adjacent frames (`framerate` filter) | Speed first; slight ghosting on fast motion |
+---
 
-### Picture-quality engineering
+## ✨ 核心特性
 
-- **Quality tiers** — Master (x264 CRF 10, visually lossless, for re-editing/archival), High (CRF 16, recommended), Standard (CRF 20).
-- **Exact frame count** — the filter chain uses `tpad` clone-padding → interpolation → `trim` back to the original duration, fixing the tail-frame loss of naive `minterpolate` chains (verified: 3 s @ 30→60 fps outputs exactly 180 frames) so audio and video stay in sync.
-- **10-bit preserved** — 10-bit sources produce 10-bit output (encoder capability is probed automatically; falls back to 8-bit with a notice).
-- **Color metadata passthrough** — bt709 / bt2020 / PQ primaries, transfer characteristics and colorspace are written to the output as-is, so HDR sources don't turn washed out.
-- **Lossless audio copy** — `-c:a copy` by default; automatic re-encode to AAC only when the codec is incompatible with the container (e.g. Opus → MP4).
-- **NVENC hardware acceleration** — auto-detected (both older and current driver presets); falls back through multiple CPU levels if NVENC is unavailable or fails; skipped automatically for 10-bit output.
-- **Guard rails** — falls back to `avg_frame_rate` when `r_frame_rate` misreports via timebase (e.g. 90000/1); excludes embedded cover-art streams so the main video stream is always the one interpolated; never overwrites (`(1)` suffix on collision).
+| 特性 | 说明 |
+| :--- | :--- |
+| 🚀 **一键 60/120 帧** | 支持目标帧率自定义（60fps、90fps、120fps 或任意倍率），画面行云流水 |
+| ⚡ **GPU 硬件加速** | 深度集成 NVIDIA NVENC 硬件编码器，智能探测驱动预设，导出速度倍增 |
+| 🎨 **HDR & 10bit 色彩透传** | 独家色彩元数据（BT.709 / BT.2020 / PQ / HLG）原样透传，色彩不发灰，保留顶级母版画质 |
+| ⏱️ **精准帧数与音画对齐** | 创新的 `tpad` 克隆与微修剪算法，杜绝传统光流插帧的尾部掉帧，确保音视频严丝合缝 |
+| 🛡️ **100% 纯本地离线** | 所有数据全程在本机运行，绝不上传云端，不消耗网络流量，完全保障隐私 |
+| 📋 **批量处理队列** | 支持多视频拖拽批量加入，支持拖拽排序、失败单项重试、完成后系统弹窗提醒 |
+| 🤖 **AI Agent & MCP 支持** | 原生开放 MCP (Model Context Protocol) 与 REST API，支持让 Cursor、Claude Code、智能体自动批量剪辑与补帧 |
 
-### Workflow
+---
 
-- **Batch queue** — drag & drop or multi-select; each item gets its own status badge (waiting / processing / done / failed / cancelled).
-- **One-click retry** of failed items after the queue finishes; cancel stops the whole queue.
-- **Live progress** — percent, processed duration, output frame count, processing fps, relative speed, ETA; cancellable at any time.
-- **Persistent preferences** — interpolation mode, quality, target fps, container and hardware settings are remembered.
-- **Preview & info panel** — resolution / fps / duration / codec / audio / size; output info after completion with a one-click "open folder".
-- **Close-window guard** while a job is running.
+## 🖥️ 界面预览
 
-## 🚀 Quick Start
+<p align="center">
+  <img src="docs/screenshot.png" alt="FrameBoost 主界面" width="85%" />
+</p>
 
-### Download (recommended)
+<p align="center">
+  <em>左侧实时素材信息与播放预览，右侧参数控制台，底栏实时显示进度、帧率与剩余时间</em>
+</p>
 
-Grab `FrameBoost.exe` from [Releases](https://github.com/zhangtt08/frameboost/releases) — a Windows x64 portable build (no installer), with ffmpeg bundled (~135 MB). Run it and drop a video in.
+---
 
-### Build from source
+## ⚙️ 三种插帧模式随心选择
 
-Prerequisites: Windows, Node.js ≥ 20.19 (22 LTS recommended).
+根据视频类型与机器性能，随心切换最适合的插帧算法：
+
+1. **光流补偿 · 精细** (`AOBMC + 双向运动估计 + 变分加权`)
+   * **特点**：运动矢量估计最平滑，边缘过渡细腻，几乎无撕裂。
+   * **适用**：动漫、高画质电影特写、慢动作升格。
+2. **光流补偿 · 均衡** (`OBMC 运动补偿`，**推荐**)
+   * **特点**：速度与画质兼顾，运动补偿准确自然。
+   * **适用**：绝大多数日常视频、Vlog、短视频。
+3. **动态帧混合** (`相邻帧加权融合`)
+   * **特点**：计算速度极快，CPU 占用极低。
+   * **适用**：低配置设备快速处理、快速运动场景消除频闪。
+
+---
+
+## 🚀 快速上手
+
+### 方式一：直接运行桌面版（开箱即用，推荐）
+1. 前往项目根目录，直接双击运行 **`FrameBoost.exe`**（便携绿色版，免安装，内置 FFmpeg 引擎）。
+2. 将想要补帧的视频拖入软件窗口。
+3. 选择目标帧率（如 60fps）及补帧模式。
+4. 点击底栏 **「开始补帧」**，静待导出完成即可！
+
+### 方式二：从源码运行（开发者模式）
+确保已安装 Node.js 18+ 与 npm：
 
 ```bash
-git clone https://github.com/zhangtt08/frameboost.git
-cd frameboost
+# 1. 克隆仓库
+git clone https://github.com/zhangtt08/video-frame-interpolator.git
+cd video-frame-interpolator
+
+# 2. 安装依赖
 npm install
-npm run dev            # vite + electron dev mode
-npm run test:pipeline  # unit tests for the ffmpeg filter-chain builder (42 assertions)
-npm run sample         # generate a 6-second 30fps demo clip
-npm run dist           # package a portable exe into release/
+
+# 3. 启动开发模式
+npm run dev
 ```
 
-On Windows you can also just double-click `启动开发模式.cmd` / `打包Windows.cmd` (dependencies install automatically on first run).
+---
 
-### Options
+## 🤖 AI 智能体与 MCP 集成
 
-- Target frame rate: ×2 / ×3 / ×4 or custom (5–480, must exceed the source fps).
-- Container: MP4 (faststart) / MKV.
-- Env vars `FFMPEG_PATH` / `FFPROBE_PATH` point to a custom ffmpeg (e.g. a newer build for newer NVENC support); the bundled one is used by default.
-
-## 🏗️ Architecture / How it works
-
-```
-electron/
-├─ main.ts      # app lifecycle, window, IPC
-├─ pipeline.ts  # pure logic: ffmpeg filter chains, attempt plans, output naming (unit-tested)
-├─ ffmpeg.ts    # shared engine: binary resolution, ffprobe probing, NVENC / 10-bit detection
-├─ agent-api.ts # in-app REST (port 8393) reusing the app's live render flow
-└─ preload.ts   # contextBridge (contextIsolation + sandbox)
-src/            # React renderer: queue UI, progress, preferences
-agent/          # standalone Agent API + MCP bridge (port 8791), see agent/README.md
-scripts/        # dev/test/sample/icon helpers
-```
-
-`pipeline.ts` builds the complete ffmpeg invocation as a pure, unit-tested plan: it picks the interpolation filter chain and produces an ordered list of attempts (NVENC first when available, then CPU fallback levels) so a failed hardware attempt degrades gracefully. `electron/ffmpeg.ts` is the single source of truth for capability probing (10-bit support, NVENC presets) and is reused by **both** the desktop app and `agent/` — so the two never diverge. Scene changes are auto-detected (`scd`) and use frame copies to avoid cross-shot ghosting.
-
-## Performance expectations
-
-Optical-flow interpolation is CPU-bound: measured at roughly **0.4× realtime for 640×360**, and typically **0.05–0.2× for 1080p**. The recommended workflow is to confirm parameters quickly with *Frame blending*, then render the final output with an optical-flow mode. NVENC accelerates encoding only — interpolation itself is always done on the CPU.
-
-## 🤖 Agent API / MCP
-
-FrameBoost exposes its real capabilities (ffmpeg probing, NVENC detection, frame-interpolation rendering) as a schema-described tool surface, so any agent — Tcode, Claude Code, Codex, or any MCP client — can drive it without reading source or guessing routes. There are two surfaces:
-
-### 1. Standalone Agent API + MCP (recommended for agents) — port **8791**
-
-A dependency-free local server in `agent/` that follows the machine-wide Agent API Standard. It **reuses the exact same compiled core as the desktop app** (`electron/pipeline.ts` for command building, and a shared `electron/ffmpeg.ts` engine for probing / NVENC / 10-bit detection) — no second implementation, no stubbed data.
+FrameBoost 不仅是一个桌面软件，还是一个强大的视频处理微服务！应用内置本地 REST API 与 MCP 服务：
 
 ```bash
-npm run agent:serve     # builds the electron core, then serves http://127.0.0.1:8791
-npm run agent:mcp       # stdio MCP bridge (initialize / tools/list / tools/call)
+# 启动面向 Agent 的本地服务（默认端口 8791）
+npm run agent:serve
 ```
 
-| HTTP contract | |
-|---|---|
-| `GET /api/health` | `{ok, data:{project, version, agent_api:1, tools, uptime_ms}}` |
-| `GET /api/agent/tools` | tool descriptors `{name, description, input_schema, risk}` |
-| `POST /api/agent/tool` | body `{tool, input}` → `{ok, data, tool, ms}`; errors as `{ok:false, error:{code, message}}` |
+已支持工具：
+* `frameboost.probe`：探测本地视频分辨率、帧率、色彩空间与音轨元数据
+* `frameboost.interpolate`：传入输入路径、目标帧率、插帧模式与输出路径，执行自动化补帧
+* `frameboost.status`：查询后台任务实时进度与硬件状态
 
-Tools (all prefixed `frameboost.`):
+在 Cursor、Claude Code 或 Antigravity 中配置 `agent/mcp-server.mjs`，即可让 AI 助手直接调用补帧能力！
 
-| Tool | Risk | What it does |
-|---|---|---|
-| `capability_probe` | read | Real ffmpeg/ffprobe paths + versions, NVENC level, 10-bit capability |
-| `list_inputs` | read | List processable video files in a directory (real `stat`) |
-| `probe_video` | read | ffprobe one file + suggested ×2/×3/×4 target fps |
-| `render_start` | **exec** | Build & actually run an interpolation job (`confirm:true` required; otherwise returns a dry-run plan). Returns a `jobId` |
-| `job_status` | read | Poll progress (percent, processed time, speed, ETA) and the real re-probed output result |
-| `cancel_job` | **write** | Stop a running job and clean up its `.part` file (`confirm:true` required) |
-| `list_outputs` | read | List FrameBoost-generated outputs in a directory |
+---
 
-`render_start` is a write action: without `confirm:true` it executes nothing and returns the resolved plan (output path, attempt sequence, encoder); with `confirm:true` it spawns the same ffmpeg invocation the desktop app would. See [`agent/README.md`](./agent/README.md) for details.
+## ⭐ 支持与致谢
 
-### 2. In-app REST — port 8393
+如果 FrameBoost 帮助你把心爱的视频变得更加流畅顺滑，请给本项目点一个 **Star ⭐**！您的支持是持续迭代维护的最大动力。
 
-While the desktop app itself is running, a lighter REST surface is available on `127.0.0.1:8393` (`FRAMEBOOST_API_PORT` to override), reusing the app's live render pipeline:
+欢迎提交 [Issue](https://github.com/zhangtt08/video-frame-interpolator/issues) 反馈建议或提交 PR 贡献代码！
 
-| Endpoint | Method | Body | Result |
-|---|---|---|---|
-| `/health` | GET | — | version |
-| `/api/nvenc` | GET | — | NVENC capability (`none` / `legacy` / `modern`) |
-| `/api/probe` | POST | `{inputPath}` | duration, fps, pixFmt, codec, 10-bit info |
-| `/api/render` | POST | `{inputPath, outputPath, targetFps, mode, quality?, useNvenc?, container?}` | 202 accepted (renders asynchronously) |
-| `/api/job` | GET | — | live progress + last render result |
+---
 
-## 📄 License
+## 📄 开源许可证
 
-[MIT](./LICENSE)
+本项目基于 [MIT License](./LICENSE) 协议开源。

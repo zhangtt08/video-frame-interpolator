@@ -13,6 +13,10 @@ import type { Plugin } from 'vite'
 //
 // style-src 里的 'unsafe-inline' 是量出来的：src/App.tsx 有 2 处 `style={{ width: ... }}`
 // （进度条宽度），内联 style 属性在没有 'unsafe-inline' 时不会生效，界面会少掉进度条。
+//
+// frame-ancestors 故意不写：本页面是 file:// 加载的，这条指令通过 <meta> 交付时浏览器一律忽略，
+// 每次启动都会在控制台留一条 error（实测）。真正需要防嵌套的话只能靠响应头，而 file:// 没有响应头，
+// 所以这里不留一条"看起来有、实际没生效"的指令。
 const CSP_PROD = [
   "default-src 'self'",
   "script-src 'self'",
@@ -23,8 +27,7 @@ const CSP_PROD = [
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'none'",
-  "frame-ancestors 'none'"
+  "form-action 'none'"
 ].join('; ')
 
 const CSP_DEV = CSP_PROD.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
@@ -34,8 +37,12 @@ function csp(mode: 'build' | 'serve'): Plugin {
   return {
     name: `frameboost:csp-${mode}`,
     apply: mode,
-    transformIndexHtml() {
-      return [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content }, injectTo: 'head-prepend' }]
+    transformIndexHtml(html) {
+      // 直接往 HTML 字符串里插，而不是用 tag/attrs 交给 vite 序列化：
+      // vite 会把 'self' 里的单引号转成 &#39;，浏览器能解码，但交付物与校验脚本里
+      // 读到的是一串实体（test-guard 正是照原文比对的），所以这里保留原样。
+      const meta = `<meta http-equiv="Content-Security-Policy" content="${content}" />`
+      return html.replace(/<head[^>]*>/i, (head) => `${head}\n    ${meta}`)
     }
   }
 }

@@ -348,11 +348,15 @@ console.log('== 6. IPC：只认自己那个窗口的调用 ==')
 console.log('== 7. CSP：构建产物里的策略与被实测的渲染层一致 ==')
 {
   const htmlPath = new URL('../dist-renderer/index.html', import.meta.url)
-  ok(fs.existsSync(path.resolve(htmlPath)), 'dist-renderer/index.html 存在（npm run build 的产物）')
+  ok(fs.existsSync(htmlPath), 'dist-renderer/index.html 存在（npm run build 的产物）')
   const html = fs.readFileSync(htmlPath, 'utf8')
-  const m = /<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*content=["']([^"']+)["']/i.exec(html)
+  // content 里本身带单引号（'self'），所以不能按"遇到引号就停"来截：
+  // 先按同一种引号配对取出整段值，再把 &#39; 这类实体还原成字符，才是浏览器真正看到的那条策略。
+  const tag = /<meta[^>]+http-equiv=["']Content-Security-Policy["'][^>]*>/i.exec(html)
+  const raw = tag ? /content=(["'])([\s\S]*?)\1/i.exec(tag[0]) : null
+  const m = raw ? [raw[0], raw[2]] : null
   ok(!!m, '交付的 HTML 里有 CSP meta')
-  const csp = m ? m[1] : ''
+  const csp = m ? m[1].replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&') : ''
   const directives = Object.fromEntries(csp.split(';').map((s) => s.trim()).filter(Boolean).map((s) => {
     const [k, ...v] = s.split(/\s+/)
     return [k, v.join(' ')]

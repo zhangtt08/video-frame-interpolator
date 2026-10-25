@@ -45,7 +45,13 @@ export function checkIpcSender(event: IpcEventLike | undefined, policy: SenderPo
     return { ok: false, code: 'NO_FRAME_URL', message: 'IPC 调用取不到 frame URL，无法确认来源，已拒绝' }
   }
   const normalized = url.replace(/\\/g, '/').toLowerCase()
-  const ok = policy.allowedUrlPrefixes.some((prefix) => normalized.startsWith(prefix.replace(/\\/g, '/').toLowerCase()))
+  // 生产页面是 loadFile 出来的，frame URL 形如 file:///C:/app/dist-renderer/index.html；
+  // 而 path.resolve 给出的是 C:/app/dist-renderer/ —— 少了 file:// 协议这一段，
+  // 前缀永远比不出来，自家窗口的 IPC 会被全数拒掉（原先就是这里把桌面版卡死的）。
+  const ok = policy.allowedUrlPrefixes.some((prefix) => {
+    const p = prefix.replace(/\\/g, '/').toLowerCase().replace(/^\/+/, '')
+    return normalized.startsWith(p) || normalized.startsWith(`file:///${p}`)
+  })
   if (!ok) {
     return { ok: false, code: 'FRAME_NOT_ALLOWED', message: `IPC 调用来自未允许的页面地址（${url.slice(0, 160)}），已拒绝` }
   }

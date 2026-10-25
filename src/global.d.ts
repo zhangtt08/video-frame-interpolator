@@ -43,7 +43,8 @@ declare global {
       apiStatus(): Promise<ApiState & { workspaceRoots?: string[] }>
       showInFolder(p: string): Promise<boolean>
       getMeta(): Promise<MetaInfo>
-      pathForFile(f: File): string
+      /** 拖放 / 文件选择得到的真实路径（preload 侧解析，绕开 File 跨桥克隆后取不到路径的问题） */
+      onFilesPicked?(cb: (paths: string[]) => void): () => void
       onApiState?(cb: (d: ApiState & { workspaceRoots?: string[] }) => void): () => void
       onProgress(cb: (d: ProgressData) => void): () => void
       onStage(cb: (d: { stage: string; label: string; encoder: string }) => void): () => void

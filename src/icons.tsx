@@ -19,12 +19,14 @@ export type IconName =
   | 'export'
   | 'import'
   | 'chevron'
+  | 'chevronDown'
   | 'warning'
   | 'info'
   | 'cpu'
   | 'gpu'
   | 'history'
   | 'film'
+  | 'grip'
 
 const PATHS: Record<IconName, JSX.Element> = {
   check: <path d="M4 12.5l5 5L20 6.5" />,
@@ -80,6 +82,7 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   chevron: <path d="M8.5 5l7 7-7 7" />,
+  chevronDown: <path d="M5 9l7 7 7-7" />,
   warning: (
     <>
       <path d="M12 4l8.5 15H3.5z" />
@@ -116,6 +119,16 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <rect x="3" y="5.5" width="18" height="13" rx="2" />
       <path d="M3 10h18M8 5.5v13M16 5.5v13" />
+    </>
+  ),
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="6" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="18" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="18" r="1.3" fill="currentColor" stroke="none" />
     </>
   )
 }

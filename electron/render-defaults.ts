@@ -67,7 +67,9 @@ export function normalizeRenderParams(raw: unknown): RenderParams {
   // useNvenc 只在"明确给了"时按给的算；没给时走 RENDER_DEFAULTS.useNvenc，两边同一个默认。
   const useNvenc = r.useNvenc === undefined || r.useNvenc === null ? RENDER_DEFAULTS.useNvenc : !!r.useNvenc
 
-  return { inputPath, outputPath, targetFps, mode: mode as RenderParams['mode'], quality: quality as Quality, container, useNvenc }
+  const scdThreshold = typeof r.scdThreshold === 'number' && Number.isFinite(r.scdThreshold) && r.scdThreshold >= 0 ? r.scdThreshold : undefined
+  const copySubtitles = typeof r.copySubtitles === 'boolean' ? r.copySubtitles : undefined
+  return { inputPath, outputPath, targetFps, mode: mode as RenderParams['mode'], quality: quality as Quality, container, useNvenc, ...(scdThreshold !== undefined ? { scdThreshold } : {}), ...(copySubtitles !== undefined ? { copySubtitles } : {}) }
 }
 
 // ---------------------------------------------------------------------------

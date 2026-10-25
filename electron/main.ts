@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, Menu, Notification, dialog, ipcMain, screen, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -11,6 +11,7 @@ import {
   encoderLabel,
   etaSeconds,
   errorCodeOf,
+  formatBytes,
   mergePresetList,
   normalizeHistory,
   normalizePreset,
@@ -91,6 +92,10 @@ let mainWindow: BrowserWindow | null = null
 let job: Job | null = null
 let lastCommand = ''
 let quitting = false
+/** 窗口几何（上次关闭时的位置与大小），存在 userData 里的一个小 JSON */
+let windowStore: JsonStore<unknown> | null = null
+/** 本次会话里用户是否还盯着窗口：失焦/最小化后完成一条才值得发系统通知 */
+let windowFocused = true
 
 // ---------- 路径授权：只有用户做过 gesture 的位置才准读、才准写 ----------
 
@@ -410,6 +415,11 @@ function spawnAttempt(p: RenderParams, info: ProbeResult, attempts: Attempt[], i
             }
             sendToWindow('render:done', done)
             recordHistory(j, true, { sizeBytes: outInfo.sizeBytes, fps: done.fps, durationSec: outInfo.durationSec })
+            notifyIfUnfocused(
+              '补帧完成',
+              `${p.outputPath.split(/[\\/]/).pop() ?? '输出文件'} · ${Math.round(done.fps)} fps · ${formatBytes(done.sizeBytes ?? 0)}`,
+              () => shell.showItemInFolder(p.outputPath)
+            )
           })
           .catch(() => {
             sendToWindow('render:done', { outputPath: p.outputPath, encoder: j.encoder })
@@ -439,6 +449,7 @@ function spawnAttempt(p: RenderParams, info: ProbeResult, attempts: Attempt[], i
     void cleanupPart(p.outputPath)
     sendToWindow('render:error', failPayload(f, tail(j.stderrTail.trim(), 1600)))
     recordHistory(j, false, { failure: f })
+    notifyIfUnfocused('补帧失败', `${p.outputPath.split(/[\\/]/).pop() ?? ''} · ${f.title}`)
     job = null
   })
 }
@@ -604,6 +615,48 @@ function initStores(): void {
   if (!dir) return
   presetStore = makeJsonStore<unknown>(path.join(dir, 'frameboost-presets.json'), [])
   historyStore = makeJsonStore<unknown>(path.join(dir, 'frameboost-history.json'), [])
+  windowStore = makeJsonStore<unknown>(path.join(dir, 'frameboost-window.json'), null)
+}
+
+/** 上次的窗口几何；读不到/不合理就返回 null，交给默认尺寸 */
+function savedBounds(): { x: number; y: number; width: number; height: number } | null {
+  const store = windowStore
+  if (!store) return null
+  const { data } = store.load()
+  if (!data || typeof data !== 'object') return null
+  const r = data as Record<string, unknown>
+  const width = Math.round(Number(r.width))
+  const height = Math.round(Number(r.height))
+  const x = Math.round(Number(r.x))
+  const y = Math.round(Number(r.y))
+  if (![width, height, x, y].every(Number.isFinite)) return null
+  if (width < 980 || height < 680) return null
+  // 上次拔掉过副屏时，别把窗口恢复到不存在的显示器上：任一角都不在任何显示器内就放弃
+  const visible = screen.getAllDisplays().some((d) => {
+    const a = d.workArea
+    return x < a.x + a.width - 80 && x + width > a.x + 80 && y < a.y + a.height - 40 && y + height > a.y + 40
+  })
+  return visible ? { x, y, width, height } : null
+}
+
+/** 一条任务跑完时，窗口不在前台就发系统通知（只在用户没盯着的时候打扰） */
+function notifyIfUnfocused(title: string, body: string, onClick?: () => void): void {
+  if (windowFocused && mainWindow?.isVisible()) return
+  try {
+    if (!Notification.isSupported()) return
+    const n = new Notification({ title, body, silent: false })
+    n.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+      }
+      onClick?.()
+    })
+    n.show()
+  } catch {
+    // 系统关掉了通知（专注助手/企业策略）不是错误，静默跳过
+  }
 }
 
 function registerIpc(): void {
@@ -651,7 +704,7 @@ function registerIpc(): void {
 
   // 拖拽进来的路径由渲染层取到真实文件位置后显式登记一次：
   // 这是"用户把它放进了队列"的服务端凭据，REST / Agent 没有这一步就过不去归属判定。
-  registerHandler('files:register', (_e, rawPaths: unknown) => {
+  const acceptPaths = (rawPaths: unknown): { registered: number; workspaceRoots: number } => {
     const list = Array.isArray(rawPaths) ? rawPaths.map((p) => String(p ?? '')) : [String(rawPaths ?? '')]
     const accepted: string[] = []
     for (const p of list) {
@@ -666,7 +719,23 @@ function registerIpc(): void {
       accepted.push(p)
     }
     broadcastApiState()
-    return { ok: true, registered: accepted.length, workspaceRoots: pathPolicy.writableRoots.length }
+    return { registered: accepted.length, workspaceRoots: pathPolicy.writableRoots.length }
+  }
+
+  registerHandler('files:register', (_e, rawPaths: unknown) => ({ ok: true, ...acceptPaths(rawPaths) }))
+
+  // preload 那一侧把拖放/文件选择的真实路径直接送上来（File 跨桥会变成克隆体，取不到路径）。
+  // 这条是单向通知：登记归属后把路径广播回渲染层，由界面统一走"添加素材"那条路。
+  ipcMain.on('files:picked', (event, rawPaths: unknown) => {
+    const verdict = checkIpcSender(event as unknown as IpcEventLike, senderPolicy())
+    if (!verdict.ok) {
+      console.log(`[frameboost-ipc] 拒绝 files:picked：${verdict.message}`)
+      return
+    }
+    const result = acceptPaths(rawPaths)
+    if (result.registered > 0 && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('files:picked', Array.isArray(rawPaths) ? rawPaths : [])
+    }
   })
 
   registerHandler('dialog:save-output', async (_e, defaultPath: unknown) => {
@@ -900,9 +969,11 @@ function registerIpc(): void {
 // ---------- 窗口与生命周期 ----------
 
 function createWindow(): void {
+  const saved = savedBounds()
   mainWindow = new BrowserWindow({
-    width: 1220,
-    height: 860,
+    width: saved?.width ?? 1220,
+    height: saved?.height ?? 860,
+    ...(saved ? { x: saved.x, y: saved.y } : {}),
     minWidth: 980,
     minHeight: 680,
     show: false,
@@ -923,8 +994,36 @@ function createWindow(): void {
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
   })
+  // 记住窗口位置与大小：下次打开还在原处（最大化时不记，还原后才记真实几何）
+  const rememberBounds = () => {
+    const w = mainWindow
+    const store = windowStore
+    if (!w || w.isDestroyed() || w.isMaximized() || w.isMinimized() || w.isFullScreen() || !store) return
+    try {
+      const b = w.getNormalBounds()
+      store.save({ x: b.x, y: b.y, width: b.width, height: b.height })
+    } catch {
+      /* 存不下不影响使用 */
+    }
+  }
+  mainWindow.on('resized', rememberBounds)
+  mainWindow.on('moved', rememberBounds)
+  mainWindow.on('close', rememberBounds)
+  mainWindow.on('focus', () => {
+    windowFocused = true
+  })
+  mainWindow.on('blur', () => {
+    windowFocused = false
+  })
+  mainWindow.on('minimize', () => {
+    windowFocused = false
+  })
+  mainWindow.on('restore', () => {
+    windowFocused = true
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
+    windowFocused = true
   })
   // 自绘标题栏：向渲染层广播最大化状态变化
   const sendMaximized = (maximized: boolean) => mainWindow?.webContents.send('window:maximized', maximized)

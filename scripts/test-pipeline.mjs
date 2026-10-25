@@ -82,6 +82,8 @@ eq(
   true,
   '精细模式 AOBMC+vsbmc'
 )
+const fScd = P.buildFilter(params({ mode: 'balanced', scdThreshold: 8.5 }), info(), true)
+eq(/scd_threshold=8\.5/.test(fScd), true, '场景检测灵敏度参数透传')
 const fFast = P.buildFilter(params({ mode: 'fast' }), info(), true)
 eq(
   fFast,
@@ -148,6 +150,8 @@ const argsMkv = P.buildArgs(params({ container: 'mkv' }), info(), { nvenc: 'none
 eq(argsMkv.includes('matroska'), true, 'mkv → matroska 封装器')
 eq(argsMkv.includes('192k'), true, 'AAC 时带码率')
 eq(argsMkv.includes('+faststart'), false, 'mkv 无 faststart')
+eq(argsMkv.includes('0:s?') && argsMkv.includes('copy'), true, 'mkv 字幕流保留')
+eq(args.includes('-map_metadata') && args.includes('0'), true, '元数据透传与章节保留')
 const argsColor = P.buildArgs(
   params(),
   info({ colorPrimaries: 'bt2020', colorTrc: 'smpte2084', colorSpace: 'bt2020nc' }),
