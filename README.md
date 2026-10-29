@@ -78,10 +78,14 @@
 
 ---
 
+## 📥 下载
+
+到 [Releases](https://github.com/zhangtt08/video-frame-interpolator/releases/latest) 下载 `FrameBoost.exe`：便携绿色版，免安装、内置 FFmpeg，双击即用。系统要求 Windows 10/11 x64；NVIDIA 显卡可启用 NVENC 硬件加速，没有独显也能用 CPU 模式。
+
 ## 🚀 快速上手
 
 ### 方式一：直接运行桌面版（开箱即用，推荐）
-1. 前往项目根目录，直接双击运行 **`FrameBoost.exe`**（便携绿色版，免安装，内置 FFmpeg 引擎）。
+1. 从 [Releases](https://github.com/zhangtt08/video-frame-interpolator/releases/latest) 下载并双击 **`FrameBoost.exe`**（便携绿色版，免安装，内置 FFmpeg 引擎）。
 2. 将想要补帧的视频拖入软件窗口。
 3. 选择目标帧率（如 60fps）及补帧模式。
 4. 点击底栏 **「开始补帧」**，静待导出完成即可！
