@@ -45,7 +45,8 @@ export const project = {
   id: 'frameboost',
   name: pkg.name || 'frameboost',
   version: pkg.version || '0.0.0',
-  summary: pkg.description || '本地视频补帧工具'
+  summary: pkg.description || '本地视频补帧工具',
+  port: 8791
 }
 export const projectId = 'frameboost'
 

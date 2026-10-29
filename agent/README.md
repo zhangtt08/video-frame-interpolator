@@ -83,3 +83,9 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"frameboost.capability_probe","arguments":{}}}' \
   | node agent/mcp-server.mjs
 ```
+
+## 统一入口（一个 MCP / 一个 HTTP API）
+
+五个软件（AI Flow、FrameBoost、Agent 对话管理、清影下载器、声析）可以由
+`agent-bus` 一个入口统一调用：本项目的 `frameboost.*` 工具原样暴露，
+服务没起时会自动拉起。见 `agent-bus/README.md`。本项目自己的 `agent/mcp-server.mjs` 仍可单独使用。
