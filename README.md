@@ -1,12 +1,12 @@
-# ⚡ FrameBoost (帧跃) · 本地极速视频补帧神器
+# ⚡ FrameBoost (帧跃) · 本地极速视频 AI 补帧神器
 
 <p align="center">
   <img src="./build/icon.png" width="100" height="100" alt="FrameBoost Icon" />
 </p>
 
 <p align="center">
-  <b>一款免费开源、支持 GPU 硬件加速的本地离线视频插帧工具</b><br>
-  一键将 24/30fps 动漫、老电影、游戏高光平滑插帧至 60/90/120fps 丝滑高刷！纯本地运行 · 零云端上传 · 保护隐私
+  <b>让你的视频秒变 60 / 120 帧丝滑高刷！免费开源、GPU 极速硬件加速的本地离线视频补帧工具</b><br>
+  一键将 24/30fps 动漫、老电影、游戏高光平滑插帧至 60/90/120fps · 原生支持 NVENC 硬件加速与 HDR 画质 · 绿色免安装开箱即用
 </p>
 
 <p align="center">
@@ -15,124 +15,93 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" />
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%2B-0078D6?logo=windows&logoColor=white" alt="Platform" />
-  <img src="https://img.shields.io/badge/GPU%E5%8A%A0%E9%80%9F-NVIDIA%20NVENC-76B900?logo=nvidia&logoColor=white" alt="NVENC" />
-  <img src="https://img.shields.io/badge/100%25-纯本地离线-brightgreen" alt="Offline" />
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white" alt="Platform" />
+  <img src="https://img.shields.io/badge/GPU%20加速-NVIDIA%20NVENC-76B900?logo=nvidia&logoColor=white" alt="NVENC" />
+  <img src="https://img.shields.io/badge/100%25-本地离线安全-brightgreen" alt="Offline" />
   <img src="https://img.shields.io/badge/FFmpeg-免安装内置-007808?logo=ffmpeg&logoColor=white" alt="FFmpeg" />
-  <img src="https://img.shields.io/badge/Agent-MCP%20Ready-orange" alt="MCP" />
+  <img src="https://img.shields.io/badge/AI%20Agent-MCP%20Ready-orange.svg" alt="MCP" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/zhangtt08/video-frame-interpolator/releases/latest"><b>🚀 [点击立即下载 Windows 绿色免安装版 FrameBoost.exe]</b></a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="FrameBoost 主界面" width="85%" />
+  <br>
+  <em>左侧实时显示素材与播放预览，右侧参数轻松调节，底部实时呈现进度与剩余时间</em>
 </p>
 
 ---
 
-## 🎯 为什么选择 FrameBoost？
+## ⚡ 为什么选择 FrameBoost？
 
 你是否有过这样的体验：
-* 想看 **60 帧 / 120 帧** 丝滑的高刷动漫或电影，但在视频网站需要会员甚至根本没有高帧率选项？
-* 网上的在线 AI 补帧工具 **按分钟收费、限制文件大小、还要排长队**，而且容易泄露个人视频隐私？
-* 用传统 FFmpeg 命令行处理，参数复杂得像天书，还常常遇到 **尾部莫名掉帧、HDR 画面发灰变色、音画不同步** 的恼人问题？
+- **想看 60 帧 / 120 帧丝滑流畅的高刷动漫或经典电影**，但视频网站要么需要开高昂会员，要么根本没有高帧率选项；
+- **网络上的在线 AI 补帧工具**：按分钟收费极贵、限制文件大小、还要排长队等待，更担心个人视频隐私泄露；
+- **传统命令行工具太折磨**：参数复杂繁琐，动辄报错崩溃，还经常遇到画面闪烁、变色（HDR 发灰）或音画不同步的恼人问题。
 
-**FrameBoost 就是为你打造的终极解决方案！**  
-无需安装复杂的 Python 或 CUDA 环境，自带精美的现代桌面界面与开箱即用的 FFmpeg 引擎。拖入视频，一键开启电影级补帧！
+**FrameBoost 就是为你量身打造的终极解决方案！**  
+无需配置 Python 或繁琐 CUDA 环境，自带精美桌面界面与开箱即用的 FFmpeg 补帧引擎。把视频往窗口里一拖，一键开启电影级丝滑补帧体验！
 
 ---
 
 ## ✨ 核心特性
 
-| 特性 | 说明 |
-| :--- | :--- |
-| 🚀 **一键 60/120 帧** | 支持目标帧率自定义（60fps、90fps、120fps 或任意倍率），画面行云流水 |
-| ⚡ **GPU 硬件加速** | 深度集成 NVIDIA NVENC 硬件编码器，智能探测驱动预设，导出速度倍增 |
-| 🎨 **HDR & 10bit 色彩透传** | 独家色彩元数据（BT.709 / BT.2020 / PQ / HLG）原样透传，色彩不发灰，保留顶级母版画质 |
-| ⏱️ **精准帧数与音画对齐** | 创新的 `tpad` 克隆与微修剪算法，杜绝传统光流插帧的尾部掉帧，确保音视频严丝合缝 |
-| 🛡️ **100% 纯本地离线** | 所有数据全程在本机运行，绝不上传云端，不消耗网络流量，完全保障隐私 |
-| 📋 **批量处理队列** | 支持多视频拖拽批量加入，支持拖拽排序、失败单项重试、完成后系统弹窗提醒 |
-| 🤖 **AI Agent & MCP 支持** | 原生开放 MCP (Model Context Protocol) 与 REST API，支持让 Cursor、Claude Code、智能体自动批量剪辑与补帧 |
+- 🚀 **一键提升至 60 / 120 帧**：自由指定目标帧率（60fps、90fps、120fps 或任意倍率），画面行云流水。
+- ⚡ **GPU 硬件极速加速**：深度集成 NVIDIA NVENC 硬件编解码，多核并发处理，导出速度数倍提升；无独显也能自动调用多核 CPU 平稳运行。
+- 🌈 **HDR 与 10-bit 色彩穿透**：无损保留 BT.709 / BT.2020 / PQ / HLG 色彩空间，色彩不发灰，还原母带级艳丽画质。
+- 🎯 **精准对齐与零音画脱节**：内置创新的运动补偿平滑算法，杜绝传统补帧尾部丢帧问题，确保音频与视频分秒不差。
+- 🔒 **100% 本地纯离线**：全部计算均在本机 GPU/CPU 运行，不消耗任何外网流量，完全保障隐私安全。
+- 📋 **批量处理队列**：支持拖入多部视频批量排队插帧，自动跳过异常，完成后系统弹窗提醒。
+- 🤖 **原生支持 AI Agent / MCP**：内置 REST API 与 MCP 服务，支持 Cursor、Claude Code 等智能体自动化批量调用。
 
 ---
 
-## 🖥️ 界面预览
+## 🎛️ 三种预设模式，随心选择
 
-<p align="center">
-  <img src="docs/screenshot.png" alt="FrameBoost 主界面" width="85%" />
-</p>
-
-<p align="center">
-  <em>左侧实时素材信息与播放预览，右侧参数控制台，底栏实时显示进度、帧率与剩余时间</em>
-</p>
+| 模式 | 核心特点 | 最适合场景 |
+| :--- | :--- | :--- |
+| 🌟 **动漫/电影模式（极致平滑 · 强烈推荐）** | 双向运动估计 + 变切加权，线条过度极致柔和，几乎无撕裂感 | 24fps 动漫观影、经典老电影、慢动作特写升格 |
+| ⚡ **平衡模式（日常推荐 · 速度与画质兼顾）** | 速度与画面效果极佳平衡，运动补偿自然精准 | 日常实拍 Vlog、短视频、纪录片、发布会录像 |
+| 🚀 **极速模式（超快导出）** | 计算速度极快，CPU/GPU 占用极低，快速消除运动画面闪烁 | 游戏高光回放、低配电脑快速预览、大批量转码 |
 
 ---
 
-## ⚙️ 三种插帧模式随心选择
+## 📥 极速上手
 
-根据视频类型与机器性能，随心切换最适合的插帧算法：
+### 方式一：直接运行桌面版（开箱即用，强烈推荐）
+1. 前往 **[Releases 页面](https://github.com/zhangtt08/video-frame-interpolator/releases/latest)** 下载最新的 **`FrameBoost.exe`**；
+2. 双击打开（绿色免安装，内置所有依赖与编解码库）；
+3. 将你想补帧的视频拖入窗口，选择目标帧率（如 60fps）与预设模式；
+4. 点击「开始补帧」，静候片刻即可得到丝滑成片！
 
-1. **光流补偿 · 精细** (`AOBMC + 双向运动估计 + 变分加权`)
-   * **特点**：运动矢量估计最平滑，边缘过渡细腻，几乎无撕裂。
-   * **适用**：动漫、高画质电影特写、慢动作升格。
-2. **光流补偿 · 均衡** (`OBMC 运动补偿`，**推荐**)
-   * **特点**：速度与画质兼顾，运动补偿准确自然。
-   * **适用**：绝大多数日常视频、Vlog、短视频。
-3. **动态帧混合** (`相邻帧加权融合`)
-   * **特点**：计算速度极快，CPU 占用极低。
-   * **适用**：低配置设备快速处理、快速运动场景消除频闪。
-
----
-
-## 📥 下载
-
-到 [Releases](https://github.com/zhangtt08/video-frame-interpolator/releases/latest) 下载 `FrameBoost.exe`：便携绿色版，免安装、内置 FFmpeg，双击即用。系统要求 Windows 10/11 x64；NVIDIA 显卡可启用 NVENC 硬件加速，没有独显也能用 CPU 模式。
-
-## 🚀 快速上手
-
-### 方式一：直接运行桌面版（开箱即用，推荐）
-1. 从 [Releases](https://github.com/zhangtt08/video-frame-interpolator/releases/latest) 下载并双击 **`FrameBoost.exe`**（便携绿色版，免安装，内置 FFmpeg 引擎）。
-2. 将想要补帧的视频拖入软件窗口。
-3. 选择目标帧率（如 60fps）及补帧模式。
-4. 点击底栏 **「开始补帧」**，静待导出完成即可！
-
-### 方式二：从源码运行（开发者模式）
-确保已安装 Node.js 18+ 与 npm：
-
+### 方式二：开发者源码运行
 ```bash
-# 1. 克隆仓库
 git clone https://github.com/zhangtt08/video-frame-interpolator.git
 cd video-frame-interpolator
-
-# 2. 安装依赖
 npm install
-
-# 3. 启动开发模式
 npm run dev
 ```
 
 ---
 
-## 🤖 AI 智能体与 MCP 集成
+## 🤖 AI Agent 与 MCP 集成
 
-FrameBoost 不仅是一个桌面软件，还是一个强大的视频处理微服务！应用内置本地 REST API 与 MCP 服务：
+FrameBoost 原生开放面向 AI 智能体的本地服务：
 
 ```bash
-# 启动面向 Agent 的本地服务（默认端口 8791）
+# 启动本地服务（默认端口 8791）
 npm run agent:serve
 ```
 
-已支持工具：
-* `frameboost.probe`：探测本地视频分辨率、帧率、色彩空间与音轨元数据
-* `frameboost.interpolate`：传入输入路径、目标帧率、插帧模式与输出路径，执行自动化补帧
-* `frameboost.status`：查询后台任务实时进度与硬件状态
-
-在 Cursor、Claude Code 或 Antigravity 中配置 `agent/mcp-server.mjs`，即可让 AI 助手直接调用补帧能力！
+已支持 `frameboost.probe`（视频参数探测）、`frameboost.interpolate`（自动化补帧执行）、`frameboost.status`（查询进度与状态）等工具。在 Cursor、Claude Code 中配置后即可让 AI 全自动调帧！
 
 ---
 
 ## ⭐ 支持与致谢
 
-如果 FrameBoost 帮助你把心爱的视频变得更加流畅顺滑，请给本项目点一个 **Star ⭐**！您的支持是持续迭代维护的最大动力。
-
-欢迎提交 [Issue](https://github.com/zhangtt08/video-frame-interpolator/issues) 反馈建议或提交 PR 贡献代码！
-
----
+如果 FrameBoost 让你心爱的动漫或视频变得更加行云流水，请在 GitHub 上为本项目点一个 **Star ⭐** 吧！你的支持是持续维护与迭代的最大动力。
 
 ## 📄 开源许可证
-
-本项目基于 [MIT License](./LICENSE) 协议开源。
+本项目基于 [MIT License](LICENSE) 协议开源。
